@@ -55,32 +55,54 @@ def wish():
     reply("I am Proton, how may I help you?")
 
 # Set Microphone parameters
-with sr.Microphone() as source:
-        r.energy_threshold = 500 
-        r.dynamic_energy_threshold = False
+MIC_DEVICE_INDEX = 1
+
+with sr.Microphone(device_index=MIC_DEVICE_INDEX) as source:
+    print("Calibrating microphone...")
+    r.dynamic_energy_threshold = True
+    r.adjust_for_ambient_noise(source, duration=2)
+    print("Microphone ready!")
 
 # Audio to String
 def record_audio():
-    with sr.Microphone() as source:
+    with sr.Microphone(device_index=MIC_DEVICE_INDEX) as source:
         r.pause_threshold = 0.8
         voice_data = ''
-        audio = r.listen(source, phrase_time_limit=5)
 
         try:
-            voice_data = r.recognize_google(audio)
-        except sr.RequestError:
-            reply('Sorry my Service is down. Plz check your Internet connection')
+            print("Listening...")
+            audio = r.listen(
+                source,
+                timeout=8,
+                phrase_time_limit=7
+            )
+
+            print("Recognizing speech...")
+            voice_data = r.recognize_google(
+                audio,
+                language="en-IN"
+            )
+
+            print("Recognized:", voice_data)
+
+        except sr.WaitTimeoutError:
+            print("No speech detected.")
+
         except sr.UnknownValueError:
-            print('cant recognize')
-            pass
-        return voice_data.lower()
+            print("Could not understand speech.")
+
+        except sr.RequestError as e:
+            reply("Speech recognition service is unavailable.")
+            print("Recognition error:", e)
+
+        return voice_data.lower().strip()
 
 
 # Executes Commands (input: string)
 def respond(voice_data):
     global file_exp_status, files, is_awake, path
     print(voice_data)
-    voice_data.replace('proton','')
+    voice_data = voice_data.replace('proton', '').strip()
     app.eel.addUserMsg(voice_data)
 
     if is_awake==False:
@@ -91,6 +113,35 @@ def respond(voice_data):
     # STATIC CONTROLS
     elif 'hello' in voice_data:
         wish()
+        
+    elif any(command in voice_data for command in [
+        'open notepad',
+        'open note pad',
+        'launch notepad',
+        'launch note pad',
+        'start notepad',
+        'open windows notepad'
+    ]):
+        try:
+            os.startfile("notepad.exe")
+            reply("Opening Notepad.")
+        except Exception as e:
+            print("Notepad error:", repr(e))
+            reply("Sorry, I could not open Notepad.")
+
+
+    elif any(command in voice_data for command in [
+        'open calculator',
+        'launch calculator',
+        'start calculator'
+    ]):
+        try:
+            os.startfile("calc.exe")
+            reply("Opening Calculator.")
+        except Exception as e:
+            print("Calculator error:", repr(e))
+            reply("Sorry, I could not open Calculator.")
+
 
     elif 'what is your name' in voice_data:
         reply('My name is Proton!')
@@ -217,9 +268,10 @@ def respond(voice_data):
     else: 
         reply('I am not functioned to do this !')
 
+
 # ------------------Driver Code--------------------
 
-t1 = Thread(target = app.ChatBot.start)
+t1 = Thread(target=app.ChatBot.start)
 t1.start()
 
 # Lock main thread until Chatbot has started
@@ -227,27 +279,27 @@ while not app.ChatBot.started:
     time.sleep(0.5)
 
 wish()
-voice_data = None
-while True:
-    if app.ChatBot.isUserInput():
-        #take input from GUI
-        voice_data = app.ChatBot.popUserInput()
-    else:
-        #take input from Voice
-        voice_data = record_audio()
 
-    #process voice_data
-    if 'proton' in voice_data:
-        try:
-            #Handle sys.exit()
+voice_data = None
+
+while True:
+    try:
+        if app.ChatBot.isUserInput():
+            # Take input from GUI
+            voice_data = app.ChatBot.popUserInput()
+        else:
+            # Take input from microphone
+            voice_data = record_audio()
+
+        # Process recognized voice commands
+        if voice_data and voice_data.strip():
             respond(voice_data)
-        except SystemExit:
-            reply("Exit Successfull")
-            break
-        except:
-            #some other exception got raised
-            print("EXCEPTION raised while closing.") 
-            break
-        
+
+    except SystemExit:
+        reply("Exit Successful")
+        break
+
+    except Exception as e:
+        print("EXCEPTION raised:", repr(e))
 
 

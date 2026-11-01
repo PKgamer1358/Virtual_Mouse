@@ -8,56 +8,117 @@ import pyautogui
 import time
 
 class Marker:
-    def __init__(self, dict_type = aruco.DICT_4X4_50, thresh_constant = 1):
-        self.aruco_dict = aruco.Dictionary_get(dict_type)
-        self.parameters = aruco.DetectorParameters_create()
-        self.parameters.adaptiveThreshConstant = thresh_constant
-        self.corners = None # corners of Marker
-        self.marker_x2y = 1 # width:height ratio
-        self.mtx, self.dist = Marker.calibrate()
-    
-    def calibrate():
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        objp = np.zeros((6*7,3), np.float32)
-        objp[:,:2] = np.mgrid[0:7,0:6].T.reshape(-1,2)
-        objpoints = [] # 3d point in real world space
-        imgpoints = [] # 2d points in image plane.
-        path = os.path.dirname(os.path.abspath(__file__))
-        p1 = path + r'\calib_images\checkerboard\*.jpg'
-        images = glob.glob(p1)
-        for fname in images:
-            img = cv2.imread(fname)
-            gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            ret, corners = cv2.findChessboardCorners(gray, (7,6),None)
-            if ret == True:
-                objpoints.append(objp)
-                corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
-                imgpoints.append(corners2)
-                img = cv2.drawChessboardCorners(img, (7,6), corners2,ret)
-                
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
-        
-        #mtx = [[534.34144579,0.0,339.15527836],[0.0,534.68425882,233.84359493],[0.0,0.0,1.0]]
-        #dist = [[-2.88320983e-01, 5.41079685e-02, 1.73501622e-03, -2.61333895e-04, 2.04110465e-01]]
-        return mtx, dist
-    
-    def detect(self, frame):
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.corners, ids, rejectedImgPoints = aruco.detectMarkers(gray_frame, self.aruco_dict, parameters = self.parameters)
-        if np.all(ids != None):
-            rvec, tvec ,_ = aruco.estimatePoseSingleMarkers(self.corners, 0.05, self.mtx, self.dist)
+    """ArUco marker detector compatible with old and new OpenCV contrib APIs."""
+
+    def __init__(self, dict_type=None, thresh_constant=1):
+        if not hasattr(aruco, "getPredefinedDictionary") and not hasattr(aruco, "Dictionary_get"):
+            raise RuntimeError(
+                "cv2.aruco is unavailable. Install opencv-contrib-python in the active venv."
+            )
+
+        if dict_type is None:
+            dict_type = getattr(aruco, "DICT_4X4_50", 0)
+
+        if hasattr(aruco, "getPredefinedDictionary"):
+            self.aruco_dict = aruco.getPredefinedDictionary(dict_type)
         else:
-            self.corners = None
-    
+            self.aruco_dict = aruco.Dictionary_get(dict_type)
+
+        if hasattr(aruco, "DetectorParameters"):
+            self.parameters = aruco.DetectorParameters()
+        else:
+            self.parameters = aruco.DetectorParameters_create()
+
+        self.parameters.adaptiveThreshConstant = thresh_constant
+        self.detector = None
+        if hasattr(aruco, "ArucoDetector"):
+            self.detector = aruco.ArucoDetector(self.aruco_dict, self.parameters)
+
+        self.corners = None
+        self.ids = None
+        self.marker_x2y = 1.0
+        self.mtx, self.dist = self.calibrate()
+
+    @staticmethod
+    def calibrate():
+        """Calibrate from checkerboard images; use a safe fallback if none exist."""
+        criteria = (
+            cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
+            30,
+            0.001,
+        )
+        objp = np.zeros((6 * 7, 3), np.float32)
+        objp[:, :2] = np.mgrid[0:7, 0:6].T.reshape(-1, 2)
+        objpoints = []
+        imgpoints = []
+        image_size = None
+
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        pattern = os.path.join(base_path, "calib_images", "checkerboard", "*.jpg")
+
+        for fname in glob.glob(pattern):
+            img = cv2.imread(fname)
+            if img is None:
+                continue
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            image_size = gray.shape[::-1]
+            found, corners = cv2.findChessboardCorners(gray, (7, 6), None)
+            if found and corners is not None:
+                objpoints.append(objp.copy())
+                refined = cv2.cornerSubPix(
+                    gray, corners, (11, 11), (-1, -1), criteria
+                )
+                imgpoints.append(refined)
+
+        if objpoints and imgpoints and image_size is not None:
+            _ret, camera_matrix, dist_coeffs, _rvecs, _tvecs = cv2.calibrateCamera(
+                objpoints, imgpoints, image_size, None, None
+            )
+            return camera_matrix, dist_coeffs
+
+        # Fallback allows marker detection without calibration images.
+        # Pose estimation will be approximate until real calibration is supplied.
+        camera_matrix = np.array(
+            [[800.0, 0.0, 320.0], [0.0, 800.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        dist_coeffs = np.zeros((5, 1), dtype=np.float64)
+        print("WARNING: No valid checkerboard calibration images found; using fallback camera parameters.")
+        return camera_matrix, dist_coeffs
+
+    def detect(self, frame):
+        if frame is None:
+            self.corners, self.ids = None, None
+            return
+
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if self.detector is not None:
+            corners, ids, _rejected = self.detector.detectMarkers(gray_frame)
+        else:
+            corners, ids, _rejected = aruco.detectMarkers(
+                gray_frame, self.aruco_dict, parameters=self.parameters
+            )
+
+        if ids is not None and len(ids) > 0:
+            self.corners, self.ids = corners, ids
+            # Pose estimation is optional for cursor tracking; guard API differences.
+            if hasattr(aruco, "estimatePoseSingleMarkers"):
+                try:
+                    aruco.estimatePoseSingleMarkers(
+                        self.corners, 0.05, self.mtx, self.dist
+                    )
+                except cv2.error:
+                    pass
+        else:
+            self.corners, self.ids = None, None
+
     def is_detected(self):
-        if self.corners:
-            return True
-        return False
-    
+        return self.corners is not None and len(self.corners) > 0
+
     def draw_marker(self, frame):
-        aruco.drawDetectedMarkers(frame, self.corners)
-    
-        
+        if self.is_detected():
+            aruco.drawDetectedMarkers(frame, self.corners)
+
 
 def ecu_dis(p1, p2):
     dist = np.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
@@ -205,10 +266,18 @@ class ROI:
         top_rx = int(bot_rx + sign * self.hsv_beta * l * np.sqrt(1/(1+slope_14**2)))
         top_ry = int(bot_ry + sign * self.hsv_beta * slope_14 * l * np.sqrt(1/(1+slope_14**2)))
         
-        region = frame[top_ry:bot_ry , top_lx:bot_rx]
-        b, g, r = np.mean(region, axis=(0, 1))
-        
-        self.hsv_glove = find_HSV([[r,g,b]])
+        height, width = frame.shape[:2]
+        x1, x2 = sorted((max(0, top_lx), min(width, bot_rx)))
+        y1, y2 = sorted((max(0, top_ry), min(height, bot_ry)))
+        region = frame[y1:y2, x1:x2]
+        if region.size == 0:
+            region = frame[max(0, int(self.marker_top[1])-5):int(self.marker_top[1])+5,
+                           max(0, int(self.marker_top[0])-5):int(self.marker_top[0])+5]
+        if region.size == 0:
+            self.hsv_glove = find_HSV([[[105, 105, 50]]])
+        else:
+            b, g, r = np.mean(region, axis=(0, 1))
+            self.hsv_glove = find_HSV([[r, g, b]])
         self.hsv_corners =  [(bot_lx,bot_ly), (bot_rx,bot_ry), (top_rx,top_ry), (top_lx,top_ly)]
         
     
@@ -258,9 +327,16 @@ class Glove:
         self.gesture = 0
     
     def find_fingers(self, FinalMask):
-        conts,h=cv2.findContours(FinalMask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
-        hull = [cv2.convexHull(c) for c in conts]
-        
+        self.fingers = 0
+        self.arearatio = 0.0
+        defects = None
+        approx = None
+        conts, _hierarchy = cv2.findContours(
+            FinalMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+        )
+        if not conts:
+            return
+
         try:
             cnt = max(conts, key = lambda x: cv2.contourArea(x))
             #approx the contour a little
@@ -272,7 +348,9 @@ class Glove:
             areahull = cv2.contourArea(hull)
             areacnt = cv2.contourArea(cnt)
             #find the percentage of area not covered by hand in convex hull
-            self.arearatio=((areahull-areacnt)/areacnt)*100
+            if areacnt <= 0:
+                return
+            self.arearatio = ((areahull - areacnt) / areacnt) * 100
             #find the defects in convex hull with respect to hand
             hull = cv2.convexHull(approx, returnPoints=False)
             defects = cv2.convexityDefects(approx, hull)
@@ -297,10 +375,13 @@ class Glove:
                 ar = math.sqrt(s*(s-a)*(s-b)*(s-c))
                 
                 #distance between point and convex hull
-                d=(2*ar)/a
-                
-                # apply cosine rule here
-                angle = math.acos((b**2 + c**2 - a**2)/(2*b*c)) * 57
+                if a <= 0 or b <= 0 or c <= 0:
+                    continue
+                d = (2 * ar) / a
+
+                # Clamp floating-point drift before acos.
+                cosine = (b**2 + c**2 - a**2) / (2 * b * c)
+                angle = math.degrees(math.acos(max(-1.0, min(1.0, cosine))))
                       
                 # ignore angles > 90 and ignore points very close to convex hull(they generally come due to noise)
                 if angle <= 90 and d>30:
@@ -367,12 +448,14 @@ class Tracker:
     def tracker_to_corner(self, final_bbox):
         if self.tracker_bbox == None:
             return None
-        final_bbox = [[[1,2],[3,4],[5,6],[7,8]]]
-        final_bbox[0][0] = [self.tracker_bbox[0],self.tracker_bbox[1]]
-        final_bbox[0][1] = [self.tracker_bbox[0]+ self.tracker_bbox[2],self.tracker_bbox[1]]
-        final_bbox[0][2] = [self.tracker_bbox[0]+ self.tracker_bbox[2],self.tracker_bbox[1] + self.tracker_bbox[3]]
-        final_bbox[0][3] = [self.tracker_bbox[0],self.tracker_bbox[1] +self.tracker_bbox[3]]
-        return [np.array(final_bbox, dtype = 'f')]
+        x, y, width, height = self.tracker_bbox
+        final_bbox = [[
+            [x, y],
+            [x + width, y],
+            [x + width, y + height],
+            [x, y + height],
+        ]]
+        return [np.asarray(final_bbox, dtype=np.float32)]
         
     def CSRT_tracker(self, frame):        
         if self.tracker_bbox == None and self.tracker_started == False:
@@ -380,17 +463,28 @@ class Tracker:
         
         if self.tracker_started == False:
             if self.tracker == None:
-                self.tracker = cv2.TrackerCSRT_create()
+                if hasattr(cv2, "TrackerCSRT_create"):
+                    self.tracker = cv2.TrackerCSRT_create()
+                elif hasattr(cv2, "legacy") and hasattr(cv2.legacy, "TrackerCSRT_create"):
+                    self.tracker = cv2.legacy.TrackerCSRT_create()
+                else:
+                    print("CSRT tracker unavailable; install opencv-contrib-python.")
+                    self.tracker_bbox = None
+                    return
         
-        if self.tracker_bbox != None:
+        if self.tracker_bbox is not None and not self.tracker_started:
             try:
                 self.start_time = time.time()
-                ok = self.tracker.init(frame, self.tracker_bbox)
+                self.tracker.init(frame, tuple(self.tracker_bbox))
                 self.tracker_started = True
-            except:
-                print("tracker.init failed")
+            except cv2.error as exc:
+                print(f"tracker.init failed: {exc}")
+                self.tracker = None
+                return
         try:
-            ok, self.tracker_bbox = self.tracker.update(frame)
+            ok, updated_bbox = self.tracker.update(frame)
+            if ok:
+                self.tracker_bbox = list(updated_bbox)
         except:
             ok = None
             print("tracker.update failed")
@@ -431,7 +525,7 @@ class Mouse:
     def move_mouse(self,frame,position,gesture):
         
         (sx,sy)=pyautogui.size()
-        (camx,camy) = (frame.shape[:2][0],frame.shape[:2][1])
+        camy, camx = frame.shape[:2]
         (mx_old,my_old) = pyautogui.position()
         
         
@@ -471,13 +565,18 @@ class GestureController:
     cam_width  = 0
     cam_height = 0
     
-    aru_marker = Marker()
-    hand_roi = ROI(2.5, 2.5, 6, 0.45, 0.6, 0.4)
-    glove = Glove()
-    csrt_track = Tracker()
-    mouse = Mouse()
+    aru_marker = None
+    hand_roi = None
+    glove = None
+    csrt_track = None
+    mouse = None
     
     def __init__(self):
+        GestureController.aru_marker = Marker()
+        GestureController.hand_roi = ROI(2.5, 2.5, 6, 0.45, 0.6, 0.4)
+        GestureController.glove = Glove()
+        GestureController.csrt_track = Tracker()
+        GestureController.mouse = Mouse()
         GestureController.cap = cv2.VideoCapture(0)
         if GestureController.cap.isOpened():
             GestureController.cam_width  = int( GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH) )
@@ -485,6 +584,9 @@ class GestureController:
         else:
             print("CANNOT OPEN CAMERA")
         
+        if not GestureController.cap.isOpened():
+            raise RuntimeError("Could not open webcam. Check camera index and permissions.")
+
         GestureController.gc_mode = 1
         GestureController.f_start_time = time.time()
         GestureController.f_now_time = time.time()
@@ -503,6 +605,9 @@ class GestureController:
             
             #read camera
             ret, frame = GestureController.cap.read()
+            if not ret or frame is None:
+                print("Unable to read from camera. Check camera connection/permissions.")
+                break
             frame = cv2.flip(frame, 1)
             
             #detect Marker, find ROI, find glove HSV, get FinalMask on glove
@@ -516,6 +621,7 @@ class GestureController:
                 GestureController.csrt_track.CSRT_tracker(frame)
                 GestureController.aru_marker.corners = GestureController.csrt_track.tracker_to_corner(GestureController.aru_marker.corners)
             
+            FinalMask = None
             if GestureController.aru_marker.is_detected():
                 GestureController.hand_roi.findROI(frame, GestureController.aru_marker)
                 GestureController.hand_roi.find_glove_hsv(frame, GestureController.aru_marker)
@@ -529,7 +635,8 @@ class GestureController:
                 GestureController.aru_marker.draw_marker(frame)
                 draw_box(frame, GestureController.hand_roi.roi_corners, (255,0,0))
                 draw_box(frame, GestureController.hand_roi.hsv_corners, (0,0,250))
-                cv2.imshow('FinalMask',FinalMask)
+                if FinalMask is not None:
+                    cv2.imshow('FinalMask', FinalMask)
             
             #display frame
             cv2.imshow('frame',frame)

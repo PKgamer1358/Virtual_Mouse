@@ -1,0 +1,14 @@
+{
+    "venvPath": ".",
+    "venv": ".venv311",
+    "pythonVersion": "3.11",
+    "pythonPlatform": "Windows",
+    "extraPaths": [
+        "src"
+    ],
+    "include": [
+        "src",
+        "tests"
+    ],
+    "typeCheckingMode": "basic"
+}

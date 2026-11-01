@@ -1,16 +1,32 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite
+.pytest_cache/
 
-Final/__pycache__/Gesture_Controller.cpython-38.pyc
-Final/__pycache__/Gesture_Controller.cpython-38.pyc
-src/.vs/slnx.sqlite
-src/.vs/slnx.sqlite
-*.json
-*.sqlite
-*.sqlite
-*.pyc
-*.json
-.vs/Repo/v16/.suo
-.vs/Gesture_Controller/v16/.suo
-*.sqlite
-*.vs
-.vs/slnx.sqlite
-*.gif
+# Virtual environments
+.venv/
+.venv311/
+venv/
+env/
+ENV/
+
+# Large binaries & archives
+models/
+*.zip
+
+# Visual Studio & VS Code
+.vs/
+*.suo
+.vscode/
+
+# Backup and temporary development files
+*.bak
+*_backup*
+*_before_*
+*_broken*
+*candidate*
+*original*
+tempCodeRunnerFile.py
+data/

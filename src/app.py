@@ -51,6 +51,8 @@ class ChatBot:
                 except:
                     #main thread exited
                     break
+
+        except Exception as e:
+            print("ChatBot startup error:", repr(e))
         
-        except:
-            pass
+       

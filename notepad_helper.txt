@@ -1,0 +1,9 @@
+    def _is_notepad_command(self, text):
+        text = text.lower().strip()
+        aliases = (
+            "open notepad", "open the notepad", "launch notepad",
+            "start notepad", "open note pad", "launch note pad",
+            "open not bad", "open note bad", "open no pad",
+            "launch not bad", "start not bad",
+        )
+        return any(alias in text for alias in aliases)
