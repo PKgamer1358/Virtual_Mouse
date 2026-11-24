@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.sqlite
 .pytest_cache/
+.matplotlib/
 
 # Virtual environments
 .venv/

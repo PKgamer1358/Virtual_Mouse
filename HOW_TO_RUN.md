@@ -1,121 +1,71 @@
-# Setup and How to Run Guide
+# Quick Run & Setup Guide
 
-This guide walks you through setting up and running the **Gesture-Controlled Virtual Mouse and Voice Assistant** on a new Windows computer.
-
----
-
-## 1. System Requirements
-
-* **Operating System**: Windows 10 or 11 (64-bit)
-* **Hardware**:
-  * Working **Webcam** (built-in or USB)
-  * Working **Microphone** (for voice commands)
-* **Software**:
-  * **Python 3.11** (Recommended) or Python 3.12 ([Download from python.org](https://www.python.org/downloads/))  
-    *(Important: Check the box **"Add python.exe to PATH"** during installation)*
-  * **Git** ([Download Git for Windows](https://git-scm.com/))
+This guide explains how to run the **Gesture-Controlled Virtual Mouse and Voice Assistant** on your current machine, as well as how to set it up on a new PC.
 
 ---
 
-## 2. Installation & Setup (One-Time)
+## ⚡ Option 1: 1-Click Launch (Easiest)
 
-Open **PowerShell** or **Command Prompt** and follow these steps:
+We have created two batch scripts at the project root for instant launch:
 
-### Step 1: Clone the Repository
-```powershell
-git clone https://github.com/PKgamer1358/Virtual_Mouse.git
-cd Virtual_Mouse
-```
+* **To run the Hand Gesture Virtual Mouse**:  
+  Double-click `run_gesture_mouse.bat`
+* **To run the Proton Voice Assistant GUI**:  
+  Double-click `run_voice_assistant.bat`
 
-### Step 2: Create a Virtual Environment
-```powershell
-python -m venv .venv
-```
-
-### Step 3: Activate the Environment
-* In **PowerShell**:
-  ```powershell
-  .\.venv\Scripts\Activate.ps1
-  ```
-  > *Note: If PowerShell displays a script execution policy error, run:*  
-  > `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`  
-  > *and re-run the activation command.*
-
-* In **Command Prompt (CMD)**:
-  ```cmd
-  .\.venv\Scripts\activate.bat
-  ```
-
-### Step 4: Install Dependencies
-
-```powershell
-# Upgrade pip
-python -m pip install --upgrade pip
-```
-
-**If you are using Python 3.11 (Recommended):**
-```powershell
-pip install -r requirements-py311.txt
-pip install sounddevice vosk assemblyai
-```
-
-**If you are using Python 3.12:**
-```powershell
-pip install opencv-python mediapipe pyautogui pynput comtypes pycaw screen-brightness-control eel SpeechRecognition pyttsx3 wikipedia sounddevice vosk
-```
-
-### Step 5 (Optional): Set Up Offline Voice Model
-To download the offline Vosk speech recognition model:
-```powershell
-powershell -ExecutionPolicy Bypass -File setup_voice.ps1
-```
+*(These scripts automatically detect your virtual environment `.venv311` or `.venv` and run the project immediately).*
 
 ---
 
-## 3. How to Run
+## 💻 Option 2: Running via Terminal (PowerShell)
 
-Before running any script, make sure your virtual environment is active (`( .venv )` should show in your terminal prompt):
+### Step 1: Open PowerShell in the project directory
 ```powershell
-.\.venv\Scripts\Activate.ps1
+cd "D:\Gesture Control\Gesture-Controlled-Virtual-Mouse\Gesture-Controlled-Virtual-Mouse"
 ```
 
-### Mode 1: Hand Gesture Virtual Mouse (Recommended)
-Controls your cursor, clicks, scrolling, drag-and-drop, volume, and brightness using camera gestures.
+### Step 2: Activate the Virtual Environment
+On this computer (where Python 3.11 environment is pre-configured):
+```powershell
+.\.venv311\Scripts\Activate.ps1
+```
+*(On a fresh installation where `.venv` was created, use: `.\.venv\Scripts\Activate.ps1`)*
 
+> **Note**: If PowerShell shows a script execution error, run:
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+> ```
+> and then re-run the activation command.
+
+### Step 3: Run the Application
+
+#### Mode 1: Hand Gesture Virtual Mouse (Recommended)
 ```powershell
 cd src
 python Gesture_Controller.py
 ```
-
-* **Keyboard Controls in Camera Window**:
-  * <kbd>Enter</kbd> or <kbd>Esc</kbd>: Exit and close the camera window safely.
+* **Controls**:
+  * <kbd>Enter</kbd> or <kbd>Esc</kbd> in the camera window: Exit and close the webcam.
   * <kbd>M</kbd>: Toggle AI Gesture Recognition mode on/off.
-* **Performance Dashboard**: While running, open your browser at [http://127.0.0.1:5000](http://127.0.0.1:5000) to see live FPS and latency metrics.
+* **Live Performance Dashboard**:  
+  While running, open your web browser at [http://127.0.0.1:5000](http://127.0.0.1:5000) for real-time FPS and latency tracking.
 
----
-
-### Mode 2: Voice Assistant GUI ("Proton")
-Launches the desktop GUI window and listens for voice commands.
-
+#### Mode 2: Voice Assistant GUI ("Proton")
 ```powershell
 cd src
 python Proton.py
 ```
-
 * **Sample Voice Commands**:
-  * `"Proton Launch Gesture Recognition"` &rarr; Starts the camera gesture mouse.
-  * `"Proton Stop Gesture Recognition"` &rarr; Turns off the camera gesture mouse.
-  * `"Proton search <topic>"` &rarr; Opens Google in Chrome and searches.
-  * `"Proton open notepad"` &rarr; Launches Windows Notepad.
-  * `"Proton open calculator"` &rarr; Launches Windows Calculator.
+  * `"Proton Launch Gesture Recognition"` &rarr; Turns on the webcam gesture mouse.
+  * `"Proton Stop Gesture Recognition"` &rarr; Stops the webcam gesture mouse.
+  * `"Proton search <query>"` &rarr; Searches Google in Chrome.
+  * `"Proton open notepad"` &rarr; Opens Windows Notepad.
+  * `"Proton open calculator"` &rarr; Opens Calculator.
   * `"Proton what is the time"` &rarr; Speaks the current time.
-  * `"Proton exit"` &rarr; Terminates the voice assistant.
+  * `"Proton exit"` &rarr; Closes Proton.
 
----
-
-### Mode 3: Glove-Controlled Virtual Mouse
+#### Mode 3: Glove-Controlled Virtual Mouse
 For controlling the mouse using uniform-colored gloves (OpenCV color tracking):
-
 ```powershell
 cd src
 python Gesture_Controller_Gloved.py
@@ -123,7 +73,7 @@ python Gesture_Controller_Gloved.py
 
 ---
 
-## 4. Gesture Reference Card
+## 🖐️ Hand Gestures Reference
 
 | Gesture | Hand Pose | Mouse Action |
 | :--- | :--- | :--- |
@@ -139,19 +89,47 @@ python Gesture_Controller_Gloved.py
 
 ---
 
-## 5. Troubleshooting & FAQs
+## 🛠️ Setting Up from Scratch on a New PC (For Friends)
 
-1. **"Webcam could not be opened" / Camera Error**:
-   * Make sure another application (Zoom, Teams, Camera app) is not using your webcam.
+If you clone this repository to a new computer, run these steps once:
+
+1. **Install Python 3.11** ([python.org](https://www.python.org/downloads/)) — make sure to check *"Add python.exe to PATH"*.
+2. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/PKgamer1358/Virtual_Mouse.git
+   cd Virtual_Mouse
+   ```
+3. **Create and activate a virtual environment**:
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+4. **Install dependencies**:
+   ```powershell
+   python -m pip install --upgrade pip
+   pip install -r requirements-py311.txt
+   pip install sounddevice vosk assemblyai
+   ```
+5. **(Optional) Offline Voice Model**:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File setup_voice.ps1
+   ```
+6. **Run**:
+   ```powershell
+   cd src
+   python Gesture_Controller.py
+   ```
+
+---
+
+## ❓ Troubleshooting
+
+1. **Camera Not Opening**:
+   * Ensure no other program (Zoom, Teams, Camera app) is currently using the camera.
    * If you have multiple cameras, specify your camera index:
      ```powershell
      $env:GESTURE_CAMERA_INDEX = "1"   # Try 0, 1, or 2
      python Gesture_Controller.py
      ```
-
-2. **Microphone not detecting speech**:
-   * Test your microphone input with the test script:
-     ```powershell
-     python mic_test.py
-     ```
-   * If using `Proton.py`, edit `MIC_DEVICE_INDEX` at line 58 of `src/Proton.py` to match your active microphone index.
+2. **Microphone Issues**:
+   * Run `python mic_test.py` from the project root to test microphone input.
